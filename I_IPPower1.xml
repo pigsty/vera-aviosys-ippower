@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<implementation >
+  <settings>
+
+  </settings>
+	<functions>
+
+		local childDeviceIndex = {}
+		local DEFAULT_POLL_INTERVAL = 30
+		local ipAddress
+		local FIRST_SW = 60
+		local LAST_SW = 63 -- change to 67 for the 8 port version
+		
+		function ipPowerPoller()
+			luup.log ("Polling IP Power Device")
+			local url = "http://" .. ipAddress .. "/Set.cmd?CMD=GetPower"
+			luup.call_timer("ipPowerPoller", 1, DEFAULT_POLL_INTERVAL, "", "")
+			
+			luup.log("Calling status  " .. url)
+			local status, data = luup.inet.wget(url)
+			if (data) then
+				luup.log("Received response " .. data)
+			else
+				luup.log("Received empty response")
+			end
+			for v = FIRST_SW,LAST_SW do
+				local value = string.match(data, "P"..v.."=(%d),")
+				if (value) then 
+					luup.variable_set("urn:upnp-org:serviceId:SwitchPower1", "Status", value, childDeviceIndex["P"..v])
+				else
+					luup.log("Value is empty")
+				end
+			end
+		end
+		
+		function ipPowerStartup(lul_device)
+  		  	luup.log("IP Power Switch #" .. lul_device .. " creating children")
+    		child_devices = luup.chdev.start(lul_device)
+
+   		 	for v = FIRST_SW,LAST_SW do
+				luup.chdev.append(lul_device,child_devices, "P" .. v, "Switch" .. v, "urn:schemas-micasaverde-com:device:GenericIO:1", "D_IPPower1.xml", "", "", false)
+    		end
+
+   			luup.chdev.sync(lul_device, child_devices)
+   			
+   			for k, v in pairs(luup.devices) do
+	        	if (v.device_num_parent == lul_device) then
+					childDeviceIndex[v.id]=k
+        		end
+    	    end
+   			
+   			ipAddress = luup.devices[lul_device].ip
+   			ipPowerPoller()
+		end
+
+	</functions>
+
+	<startup>ipPowerStartup</startup>
+
+	<actionList>
+		<action>
+			<serviceId>urn:upnp-org:serviceId:SwitchPower1</serviceId>
+			<name>SetTarget</name>
+			<job>
+				local url = "http://" .. ipAddress .. "/Set.cmd?CMD=SetPower+" .. luup.devices[lul_device].id .. "=" .. lul_settings.newTargetValue
+				luup.log("Sending command " .. url)
+				local status, data = luup.inet.wget(url)
+				if (data) then
+					luup.log("Received response " .. data)
+				else
+					luup.log("Received empty response")
+				end
+				local value = string.match(data, luup.devices[lul_device].id.."=(%d)") 
+				if (value) then 
+					luup.variable_set("urn:upnp-org:serviceId:SwitchPower1", "Status", value, lul_device)
+				else
+					luup.log("Value is empty")
+				end
+			</job>
+			</action>
+		</actionList>
+</implementation>
