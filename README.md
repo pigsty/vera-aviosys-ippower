@@ -1,6 +1,6 @@
 ## Scope ##
 
-This is a very simple Vera plugin for the Aviosys IP Power switches
+This is a Vera plugin for HTTP control of the Aviosys IP Power switches
 
 ## Features ##
 
